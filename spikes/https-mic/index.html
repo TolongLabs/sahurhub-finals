@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>https-mic spike</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #111;
+        color: #eee;
+        margin: 0;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+      }
+      #status {
+        font-size: 0.9rem;
+        text-align: center;
+        line-height: 1.6;
+      }
+      .pill {
+        display: inline-block;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        margin: 0.1rem;
+      }
+      .ok {
+        background: #1e5f2b;
+      }
+      .bad {
+        background: #6b1e1e;
+      }
+      .pending {
+        background: #5f4a1e;
+      }
+      #talk {
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        border: none;
+        font-size: 1.2rem;
+        font-weight: bold;
+        background: #333;
+        color: #eee;
+        user-select: none;
+        touch-action: none;
+      }
+      #talk:active,
+      #talk.recording {
+        background: #b23b3b;
+      }
+      #talk:disabled {
+        opacity: 0.4;
+      }
+      audio {
+        width: 100%;
+        max-width: 320px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>https-mic spike</h1>
+    <div id="status">
+      <span>WS: </span><span id="ws-state" class="pill pending">connecting…</span><br />
+      <span>Mic: </span><span id="mic-state" class="pill pending">not requested</span>
+    </div>
+    <button id="enable-mic">Enable microphone</button>
+    <button id="talk" disabled>Hold to talk</button>
+    <div>
+      <p>Last recording:</p>
+      <audio id="playback" controls></audio>
+    </div>
+
+    <script type="module">
+      const wsStateEl = document.getElementById('ws-state')
+      const micStateEl = document.getElementById('mic-state')
+      const enableMicBtn = document.getElementById('enable-mic')
+      const talkBtn = document.getElementById('talk')
+      const playbackEl = document.getElementById('playback')
+
+      function setPill(el, text, kind) {
+        el.textContent = text
+        el.className = `pill ${kind}`
+      }
+
+      let ws = null
+      let stream = null
+      let recorder = null
+      let chunks = []
+      let mimeType = ''
+
+      function connect() {
+        setPill(wsStateEl, 'connecting…', 'pending')
+        ws = new WebSocket(`wss://${location.host}/ws`)
+        ws.addEventListener('open', () => setPill(wsStateEl, 'open', 'ok'))
+        ws.addEventListener('close', () => {
+          setPill(wsStateEl, 'closed — retrying…', 'bad')
+          setTimeout(connect, 1500)
+        })
+        ws.addEventListener('error', () => setPill(wsStateEl, 'error', 'bad'))
+        ws.addEventListener('message', (event) => {
+          if (typeof event.data !== 'string') return
+          const msg = JSON.parse(event.data)
+          if (msg.type === 'saved') {
+            playbackEl.src = msg.url
+          }
+        })
+      }
+
+      async function enableMic() {
+        setPill(micStateEl, 'requesting…', 'pending')
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          setPill(micStateEl, 'granted', 'ok')
+          talkBtn.disabled = false
+        } catch (err) {
+          setPill(micStateEl, `denied: ${err.message}`, 'bad')
+        }
+      }
+
+      function pickMimeType() {
+        const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        for (const candidate of candidates) {
+          if (MediaRecorder.isTypeSupported(candidate)) return candidate
+        }
+        return ''
+      }
+
+      function startRecording() {
+        if (!stream || recorder) return
+        chunks = []
+        mimeType = pickMimeType()
+        recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) chunks.push(event.data)
+        }
+        recorder.onstop = async () => {
+          const blob = new Blob(chunks, { type: recorder.mimeType || mimeType })
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'audio-start', mime: blob.type }))
+            ws.send(await blob.arrayBuffer())
+          }
+          recorder = null
+        }
+        recorder.start()
+        talkBtn.classList.add('recording')
+        talkBtn.textContent = 'Recording…'
+      }
+
+      function stopRecording() {
+        if (recorder && recorder.state !== 'inactive') recorder.stop()
+        talkBtn.classList.remove('recording')
+        talkBtn.textContent = 'Hold to talk'
+      }
+
+      talkBtn.addEventListener('mousedown', startRecording)
+      talkBtn.addEventListener('mouseup', stopRecording)
+      talkBtn.addEventListener('mouseleave', stopRecording)
+      talkBtn.addEventListener('touchstart', (event) => {
+        event.preventDefault()
+        startRecording()
+      })
+      talkBtn.addEventListener('touchend', (event) => {
+        event.preventDefault()
+        stopRecording()
+      })
+
+      enableMicBtn.addEventListener('click', enableMic)
+      connect()
+    </script>
+  </body>
+</html>

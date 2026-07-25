@@ -1,0 +1,37 @@
+{
+  "id": "tralala",
+  "displayName": "Tralala",
+  "voice": {
+    "backend": "tts-flash",
+    "voiceId": "dylan",
+    "placeholder": true
+  },
+  "model": {
+    "renderer": "src/kiosk/model",
+    "colors": {
+      "body": "#5C656F",
+      "mallet": "#3E464E",
+      "foot": "#3AA0E8",
+      "face": "#EDE2CE",
+      "eye": "#17232D",
+      "outline": "#17232D",
+      "accent": "#FFFFFF"
+    },
+    "proportions": {
+      "bodyWidth": 0.9,
+      "bodyHeight": 2.0,
+      "bodyDepth": 0.7,
+      "footWidth": 0.34,
+      "footHeight": 0.14,
+      "headHeight": 0.6,
+      "armLength": 0.5,
+      "malletHandleLength": 0.7,
+      "malletHeadSize": 0.2
+    }
+  },
+  "actions": {
+    "remind": { "animation": "stomp", "tiers": 3 },
+    "escalate": { "animation": "strut", "tiers": 3 }
+  },
+  "escalationFlavor": ["playful", "pumped", "unhinged"]
+}

@@ -1,0 +1,38 @@
+{
+  "id": "sahur",
+  "displayName": "Sahur",
+  "voice": {
+    "backend": "tts-flash",
+    "voiceId": "ethan",
+    "placeholder": true
+  },
+  "model": {
+    "renderer": "src/kiosk/model",
+    "colors": {
+      "body": "#6B4A32",
+      "mallet": "#C98A3B",
+      "foot": "#D9A066",
+      "face": "#F3E6D0",
+      "eye": "#241C16",
+      "outline": "#241C16",
+      "accent": "#3C7A72"
+    },
+    "proportions": {
+      "bodyWidth": 0.9,
+      "bodyHeight": 2.0,
+      "bodyDepth": 0.6,
+      "footWidth": 0.35,
+      "footHeight": 0.25,
+      "headHeight": 0.9,
+      "armLength": 0.5,
+      "malletHandleLength": 0.9,
+      "malletHeadSize": 0.16
+    }
+  },
+  "spriteFallback": "assets/character/manifest.json",
+  "actions": {
+    "remind": { "animation": "knock", "tiers": 3 },
+    "escalate": { "animation": "postureShift", "tiers": 3 }
+  },
+  "escalationFlavor": ["gentle", "direct", "blunt"]
+}

@@ -1,0 +1,3 @@
+cert/
+recordings/*
+!recordings/.gitkeep
