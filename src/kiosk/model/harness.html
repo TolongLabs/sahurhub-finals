@@ -1,0 +1,88 @@
+<!doctype html>
+<!--
+  T9a dev harness (docs/plan.md T9a deliverable 5) — verifies the
+  character-agnostic renderer off the kiosk page / WS wire, at the real
+  480x320 panel size.
+
+  Reproduce:
+    bun build src/kiosk/model/harness.ts --outfile src/kiosk/model/harness.bundle.js --target browser
+    bun run src/kiosk/model/serve.ts
+    open http://localhost:4174/  (harness.bundle.js is a generated artifact,
+    not committed — rebuild it with the command above before serving)
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SahurHub — Model Harness</title>
+    <style>
+      body {
+        margin: 0;
+        background: #1a1a1a;
+        color: #eee;
+        font: 13px system-ui, sans-serif;
+        display: flex;
+        gap: 16px;
+        padding: 16px;
+      }
+      #stage {
+        width: 480px;
+        height: 320px;
+        background: #2a2a2a;
+        border: 1px solid #444;
+        flex-shrink: 0;
+      }
+      #controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 260px;
+      }
+      fieldset {
+        border: 1px solid #444;
+        border-radius: 4px;
+      }
+      button {
+        margin: 2px;
+      }
+      #status {
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="controls">
+      <div id="status">loading…</div>
+      <fieldset>
+        <legend>Expression</legend>
+        <button type="button" data-expression="neutral">neutral</button>
+        <button type="button" data-expression="smug">smug</button>
+        <button type="button" data-expression="angry">angry</button>
+        <button type="button" data-expression="sulk">sulk</button>
+        <button type="button" data-expression="shock">shock</button>
+        <button type="button" data-expression="sleep">sleep</button>
+      </fieldset>
+      <fieldset>
+        <legend>Remind (knock)</legend>
+        <button type="button" data-action="remind" data-intensity="1">tier 1</button>
+        <button type="button" data-action="remind" data-intensity="2">tier 2</button>
+        <button type="button" data-action="remind" data-intensity="3">tier 3</button>
+      </fieldset>
+      <fieldset>
+        <legend>Escalate (posture)</legend>
+        <button type="button" data-action="escalate" data-intensity="1">tier 1</button>
+        <button type="button" data-action="escalate" data-intensity="2">tier 2</button>
+        <button type="button" data-action="escalate" data-intensity="3">tier 3</button>
+      </fieldset>
+      <fieldset>
+        <legend>Mouth</legend>
+        <input id="mouth" type="range" min="0" max="100" value="0" />
+      </fieldset>
+      <fieldset>
+        <legend>Speaking</legend>
+        <label><input id="speaking" type="checkbox" /> speaking</label>
+      </fieldset>
+    </div>
+    <script type="module" src="/src/kiosk/model/harness.bundle.js"></script>
+  </body>
+</html>
