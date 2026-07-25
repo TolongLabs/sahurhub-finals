@@ -72,6 +72,8 @@
   </ol>
 </details>
 
+---
+
 <!-- ABOUT THE PROJECT -->
 
 ## About The Project
@@ -93,6 +95,8 @@ Built for the [Qwen Brainrot Hackathon 2026](https://finals-qbh.damnitjoshua.wor
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
 
+---
+
 <!-- SCREENSHOTS -->
 
 ## Screenshots
@@ -112,6 +116,8 @@ Built for the [Qwen Brainrot Hackathon 2026](https://finals-qbh.damnitjoshua.wor
 |                <sub>Two tasks captured from ordinary conversation — no command, no form.</sub>                 |                     <sub>Live countdowns and escalation state: the deterministic half, doing its job.</sub>                      |
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
+
+---
 
 <!-- HOW IT WORKS -->
 
@@ -139,23 +145,29 @@ The kiosk consumes the same event stream: expression poses, amplitude-driven lip
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
 
+---
+
 <!-- FEATURES -->
 
 ## Features
 
-- 🎙️ **Voice and text, both** — hold-to-talk push-to-talk or plain typing, with barge-in that cuts an in-flight reply mid-sentence.
-- 🪤 **Task capture without a command** — tasks are extracted from ordinary conversational context. No add-task syntax to learn, and no second model call to pay for.
-- ⏰ **Deterministic escalation** — `pending → reminding → escalated ×2 → missed`, driven by a timer kernel that rebuilds itself from SQLite after a restart.
-- 🎭 **Two characters, one seam** — **Sahur** (wooden log, percussion menace) and **Tralala** (blue sneakers, cardio menace). Each is a manifest plus a character bible; prompt, voice, colors, and animations all key off it.
-- 🧱 **Procedural 3D, zero asset pipeline** — the characters are composed from Three.js primitives in code. Nothing to download, nothing to rig, and it re-builds from scratch inside the 2-hour finals window.
-- 👉 **Poke to retaliate** — tap the character on the panel or from the phone and it swipes back, interrupting whatever it was saying.
-- 🖼️ **Uploads with a vision lane** — text and images up to 5 MB; text enters context, images go through Qwen vision. Failures degrade to an in-character line instead of crashing.
-- 🔊 **Audio follows you** — exactly one playback target at a time, Phone or Device, while the kiosk keeps receiving amplitude data for lip-sync either way.
-- 💬 **Real conversations** — multiple threads, async-generated titles, editable and deletable, persisted in `bun:sqlite`.
-- 🌗 **Polished remote** — light/dark tokens with no flash on load, self-hosted Fredoka, and a hand-rolled markdown renderer that never touches `dangerouslySetInnerHTML`.
-- 🥁 **Soundboard stings** — task-completion and entrance beats, because the alternative was silence.
+| Feature                                   | What It Does                                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🎙️ **Voice and text, both**               | Hold-to-talk push-to-talk or plain typing, with barge-in that cuts an in-flight reply mid-sentence                                                                        |
+| 🪤 **Task capture without a command**     | Tasks are extracted from ordinary conversational context — no add-task syntax to learn, and no second model call to pay for                                               |
+| ⏰ **Deterministic escalation**           | `pending → reminding → escalated ×2 → missed`, driven by a timer kernel that rebuilds itself from SQLite after a restart                                                  |
+| 🎭 **Two characters, one seam**           | **Sahur** (wooden log, percussion menace) and **Tralala** (blue sneakers, cardio menace) — each a manifest plus a bible that drives prompt, voice, colors, and animations |
+| 🧱 **Procedural 3D, zero asset pipeline** | Characters are composed from Three.js primitives in code — nothing to download, nothing to rig, and it re-builds from scratch inside the 2-hour finals window             |
+| 👉 **Poke to retaliate**                  | Tap the character on the panel or from the phone and it swipes back, interrupting whatever it was saying                                                                  |
+| 🖼️ **Uploads with a vision lane**         | Text and images up to 5 MB — text enters context, images go through Qwen vision, and failures degrade to an in-character line instead of crashing                         |
+| 🔊 **Audio follows you**                  | Exactly one playback target at a time, Phone or Device, while the kiosk keeps receiving amplitude data for lip-sync either way                                            |
+| 💬 **Real conversations**                 | Multiple threads with async-generated titles, editable and deletable, persisted in `bun:sqlite`                                                                           |
+| 🌗 **Polished remote**                    | Light/dark tokens with no flash on load, self-hosted Fredoka, and a hand-rolled markdown renderer that never touches `dangerouslySetInnerHTML`                            |
+| 🥁 **Soundboard stings**                  | Task-completion and entrance beats, because the alternative was silence                                                                                                   |
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
+
+---
 
 <!-- ARCHITECTURE -->
 
@@ -240,6 +252,8 @@ The parser strips tag-shaped garbage from visible text, holds a trailing partial
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
 
+---
+
 <!-- TECH STACK -->
 
 ## Tech Stack
@@ -255,6 +269,8 @@ The parser strips tag-shaped garbage from visible text, holds a trailing partial
 | **Local HTTPS** | mkcert · Avahi mDNS (`sahurhub.local`)                                          |
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
+
+---
 
 <!-- HARDWARE -->
 
@@ -273,6 +289,8 @@ The parser strips tag-shaped garbage from visible text, holds a trailing partial
 **Want to build one?** The [runbook](runbook.md) walks the whole thing top to bottom: assembly, SD-card flashing, provisioning, and operation.
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
+
+---
 
 <!-- GETTING STARTED -->
 
@@ -331,6 +349,8 @@ bun run dev
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
 
+---
+
 <!-- CONFIGURATION -->
 
 ## Configuration
@@ -356,6 +376,8 @@ PORT=8081 HTTPS_PORT=8444 bun run dev
 ```
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
+
+---
 
 <!-- DEPLOYING TO THE PI -->
 
@@ -383,6 +405,8 @@ sudo ./scripts/setup-pi.sh --ssid "<hotspot>" --pass "<password>"
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
 
+---
+
 <!-- PROJECT STRUCTURE -->
 
 ## Project Structure
@@ -409,6 +433,8 @@ SahurHub/
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
 
+---
+
 <!-- LICENSE -->
 
 ## License
@@ -416,6 +442,8 @@ SahurHub/
 Distributed under the MIT License. See [LICENSE](../LICENSE) for details.
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
+
+---
 
 <!-- TEAM -->
 
@@ -446,6 +474,8 @@ Built by **TolongLabs** for the Qwen Brainrot Hackathon 2026.
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
 
+---
+
 <!-- ACKNOWLEDGMENTS -->
 
 ## Acknowledgments
@@ -457,3 +487,5 @@ Built by **TolongLabs** for the Qwen Brainrot Hackathon 2026.
 - [Shields.io](https://shields.io) — the badges above
 
 <p align="right"><a href="#readme-top">&uarr;</a></p>
+
+---
