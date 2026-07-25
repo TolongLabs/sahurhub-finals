@@ -1,0 +1,39 @@
+{
+  "name": "sahurhub",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "prepare": "husky",
+    "lint": "biome check .",
+    "format": "biome format --write . && prettier --write .",
+    "dev": "bun run src/server/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build:remote": "cd apps/remote && bun run build",
+    "build:kiosk": "bun build src/kiosk/main.ts --outdir src/kiosk/dist --target browser --loader .png:file --public-path=/dist/",
+    "dev:remote": "cd apps/remote && bun run dev",
+    "dev:kiosk": "bash scripts/dev-kiosk.sh"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": ["biome check --write --no-errors-on-unmatched"],
+    "*.{css,json}": ["biome format --write --no-errors-on-unmatched"],
+    "*.{md,yaml,yml}": ["prettier --write"]
+  },
+  "dependencies": {
+    "qrcode-generator": "^2.0.4",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@types/bun": "^1.3.14",
+    "@types/three": "^0.185.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "typescript": "^7.0.2"
+  },
+  "trustedDependencies": ["@biomejs/biome"]
+}

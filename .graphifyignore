@@ -1,0 +1,33 @@
+# Keep the knowledge graph focused. Merged with .gitignore (! re-includes).
+# Use docs/* (not docs/) so the ! lines below can re-include specific files.
+docs/*
+!docs/prd.md
+!docs/trd.md
+!docs/project-requirements.md
+.agents/
+.claude/
+.codex/
+.husky/
+bun.lock
+package.json
+biome.json
+commitlint.config.js
+.prettierrc
+.env.example
+LICENSE
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.cursorrules
+.windsurfrules
+RTK.md
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.svg
+assets/
+public/assets/
