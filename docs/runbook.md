@@ -1,152 +1,427 @@
-# SahurHub Raspberry Pi 5 Runbook
+# SahurHub Runbook — Build One Yourself
 
-## Overview
+> Everything needed to go from loose parts to a working SahurHub: **assemble → flash → provision → run**.
+>
+> This runbook is the single source of truth for hardware and deployment. Product scope lives in [prd.md](prd.md); the architecture contract lives in [trd.md](trd.md).
 
-SahurHub is a deliberately useless but working task-reminder IoT companion. Sahur is the on-panel character: a phone conversation can capture a task from normal language, then Sahur follows up with reminders and escalating knock reactions.
+---
 
-The production Qwen path is chained: `qwen3-asr-flash` → `qwen3.6-flash` → `qwen3-tts-flash`. Speech is transcribed, the reply and task tag are generated, then the clean reply is spoken. Task capture is part of that same chat generation; it does not need an explicit add-task command or a second classifier call.
+## Contents
 
-| Hardware                                           | Purpose                                   |
-| -------------------------------------------------- | ----------------------------------------- |
-| Raspberry Pi 5                                     | Device host                               |
-| Official Pi 5 PSU                                  | Required stable demo power                |
-| Genuine Waveshare 3.5-inch RPi LCD (A) Rev4.0, SPI | ILI9486 + XPT2046 panel; upright portrait |
-| USB speaker                                        | Device-side audio output                  |
-| SD card                                            | Raspberry Pi OS boot media                |
-| Phone hotspot                                      | Demo network and phone remote access      |
+1. [What You Are Building](#1-what-you-are-building)
+2. [Bill Of Materials](#2-bill-of-materials)
+3. [Assembling The Hardware](#3-assembling-the-hardware)
+4. [Flashing The SD Card](#4-flashing-the-sd-card)
+5. [First Boot](#5-first-boot)
+6. [Provisioning SahurHub](#6-provisioning-sahurhub)
+7. [Adding Your Qwen Key](#7-adding-your-qwen-key)
+8. [Reboot And Verify](#8-reboot-and-verify)
+9. [Using The Device](#9-using-the-device)
+10. [Operating The Service](#10-operating-the-service)
+11. [Networking](#11-networking)
+12. [Local Development Without A Pi](#12-local-development-without-a-pi)
+13. [Troubleshooting](#13-troubleshooting)
+14. [What Is Confirmed, And What Is Not](#14-what-is-confirmed-and-what-is-not)
 
-Do not add a microphone or camera module for the MVP: the phone webapp supplies text, push-to-talk audio, and uploads.
+---
 
-## Flashing The Pi
+## 1. What You Are Building
 
-1. In Raspberry Pi Imager, select **Raspberry Pi OS Bookworm 64-bit (Desktop)** and write it to the SD card.
-2. In Imager OS customization, set hostname `sahurhub`, enable SSH, add Wi-Fi credentials, and choose the correct locale and keyboard.
-3. Use the official Pi 5 PSU for demos. Boot with the LCD attached, then verify power with `vcgencmd get_throttled` (`0x0` is clean).
-4. Boot the Pi, complete any first-login prompts, and use SSH or a local terminal to continue.
+A palm-sized desk companion. An animated 3D character lives on a small SPI panel attached to a Raspberry Pi 5; you talk to it from your phone over your own hotspot.
 
-### Power And Panel Seating
+| Piece      | Where It Runs                    | What It Does                                                               |
+| ---------- | -------------------------------- | -------------------------------------------------------------------------- |
+| **Server** | Raspberry Pi, `sahurhub.service` | One Bun process: HTTP for the kiosk, HTTPS for the phone, shared WebSocket |
+| **Kiosk**  | Chromium on the Pi's panel       | The Three.js character, connection badge, and phone-URL QR                 |
+| **Remote** | Your phone's browser             | Chat, push-to-talk, tasks drawer, settings                                 |
+| **Qwen**   | Alibaba Cloud Model Studio       | ASR, reply + tag generation, TTS                                           |
 
-- A 45W USB-C PD power bank without a 5V/5A profile can show the red LED but fail to boot with the LCD attached. Use wall power only for demos.
-- A mis-seated LCD HAT can prevent boot entirely: red LED, no green activity. Seat its 26-pin socket over pins 1–26 at the 3.3V/5V end, with both pin rows engaged.
+Assembly and flashing are quick; provisioning is mostly unattended, and its length depends on your network — it downloads packages, Bun, mkcert, and the full dependency tree, then builds both browser apps.
 
-## One-Shot Provisioning
+### Before You Start
 
-Clone and provision from the target user's shell:
+- The Pi needs **internet access** during provisioning (package installs, Bun, mkcert, `bun install`).
+- The phone and the Pi must end up on the **same network**. A phone hotspot is the recommended setup — it is portable and does not depend on venue Wi-Fi.
+- You do **not** need a Qwen API key to get a working device. Without one, a deterministic mock brain drives the entire UI, kiosk, and scheduler.
+
+---
+
+## 2. Bill Of Materials
+
+| Component                                      | Purpose            | Notes                                                             |
+| ---------------------------------------------- | ------------------ | ----------------------------------------------------------------- |
+| **Raspberry Pi 5**                             | Device host        | The provisioner targets Pi 5 on Bookworm                          |
+| **Official Raspberry Pi 5 PSU (27W USB-C PD)** | Power              | **Not optional** — see the warning below                          |
+| **Waveshare 3.5" RPi LCD (A) Rev4.0, SPI**     | Display + touch    | ILI9486 display + XPT2046 touch controller, 480×320 native        |
+| **microSD card**                               | Boot media         | 16 GB or larger; the Desktop image plus dependencies is not small |
+| **USB speaker**                                | Device-side audio  | Any USB audio output the Pi enumerates                            |
+| **A phone**                                    | The remote control | Supplies the hotspot, the microphone, and the browser             |
+
+> [!WARNING]
+> **Power is the single most common build failure.** A 45W USB-C PD power bank _without_ a 5V/5A profile will light the red LED but fail to boot once the LCD is attached. Use the official wall PSU, especially for demos.
+
+### Deliberately Not Specified
+
+Two things are genuinely part of a finished build but are **not** prescribed here, because this project has no verified reference design for them:
+
+- **The enclosure.** The unit in the project banner is a custom case. Any box that clears the HAT and exposes the panel works; nothing in the software depends on it.
+- **No microphone or camera on the device.** This is a design decision, not an omission — the phone supplies text, push-to-talk audio, and uploads. It is also _why_ the phone listener must be HTTPS: browsers only grant `getUserMedia` in a secure context.
+
+---
+
+## 3. Assembling The Hardware
+
+Assembly is short. The only step with a real failure mode is seating the panel.
+
+### 3.1 Seat The LCD HAT
+
+The Waveshare 3.5" LCD (A) uses a **26-pin socket**, not the full 40-pin header.
+
+1. Power the Pi **off** and unplug it.
+2. Align the HAT's 26-pin socket over **pins 1–26**, at the **3.3V/5V end** of the 40-pin header. Pin 1 is the 3.3V pin, at the end nearest the USB-C power connector.
+3. Press down evenly until **both rows of pins** are fully engaged.
+
+> [!CAUTION]
+> A mis-seated HAT does not merely fail to display — **it prevents the Pi from booting at all**: red LED, no green activity. If you see that symptom later, come back and reseat this connector before debugging anything else.
+
+### 3.2 Connect The Rest
+
+1. Plug the **USB speaker** into any USB port.
+2. Insert the **microSD card** once you have flashed it (§4).
+3. Connect the **official PSU** last.
+
+Leave the Pi unpowered until the card is flashed.
+
+---
+
+## 4. Flashing The SD Card
+
+**Supported OS: Raspberry Pi OS Bookworm, 64-bit, Desktop.**
+
+This is not a soft preference. The provisioner's display and kiosk steps depend on Bookworm specifics — the `labwc` session for kiosk autostart, and `/boot/firmware/config.txt` for the SPI overlay. The server half of the script is Debian-family best-effort; the panel half is Bookworm-primary.
+
+### 4.1 Write The Image
+
+1. Install [Raspberry Pi Imager](https://www.raspberrypi.com/software/).
+2. Choose device **Raspberry Pi 5**.
+3. Choose OS **Raspberry Pi OS (64-bit)** — the Desktop image, not Lite. _(Lite has no `labwc` session, so kiosk autostart will not install.)_
+4. Choose your microSD card.
+
+### 4.2 Apply OS Customisation
+
+Before writing, open **Edit Settings** and set:
+
+| Setting                   | Value              | Why                                                        |
+| ------------------------- | ------------------ | ---------------------------------------------------------- |
+| **Hostname**              | `sahurhub`         | The provisioner sets this anyway; setting it now is tidier |
+| **Username**              | your choice        | This account will own and run SahurHub                     |
+| **Password**              | your choice        | You will need it for `sudo`                                |
+| **Wi-Fi SSID / password** | your phone hotspot | Gives the Pi internet access on first boot                 |
+| **Locale / keyboard**     | your region        | Saves grief in the terminal later                          |
+| **Enable SSH**            | on                 | Lets you work from your laptop instead of the 3.5" panel   |
+
+> Remember the **username** you choose. Every later command runs as that user, and the systemd service is generated to run as them.
+
+Then **write the image** and eject the card.
+
+---
+
+## 5. First Boot
+
+1. Insert the microSD card into the Pi.
+2. Attach the panel, speaker, and **official PSU**.
+3. Power on and wait for the desktop to appear. Complete any first-login prompts.
+
+### 5.1 Confirm Power Is Clean
+
+```bash
+vcgencmd get_throttled
+```
+
+`throttled=0x0` means clean. Anything else points at the power supply — revisit §2 before continuing.
+
+### 5.2 Get A Shell
+
+Work over SSH from your laptop; the 3.5" panel is a poor terminal.
+
+```bash
+ssh <your-username>@sahurhub.local
+```
+
+If mDNS does not resolve (common on Windows/WSL — see §11.3), find the Pi's IP from your hotspot's client list and use that instead.
+
+---
+
+## 6. Provisioning SahurHub
+
+One script does the entire software build. It is **idempotent** — safe to re-run as many times as you like.
+
+### 6.1 Clone And Run
 
 ```bash
 git clone https://github.com/TolongLabs/SahurHub
 cd SahurHub
-sudo ./scripts/setup-pi.sh
+sudo ./scripts/setup-pi.sh --ssid "<hotspot-name>" --pass "<hotspot-password>"
 ```
 
-The supported display path is Raspberry Pi OS Bookworm 64-bit. The server and remote-app provisioning steps are Debian-family best effort; the labwc kiosk and SPI-panel steps are Bookworm-primary.
+> [!IMPORTANT]
+> Run it with **`sudo` from your own user**, not as root and not via `sudo -i`. The script reads `SUDO_USER` to decide who owns the install, and **refuses to run without it**. That user's home is where Bun lands and whose name goes into the systemd unit.
 
-| Option                    | Use                                                                |
-| ------------------------- | ------------------------------------------------------------------ |
-| `--ssid <hotspot>`        | Set the phone-hotspot SSID                                         |
-| `--pass <password>`       | Set the phone-hotspot password                                     |
-| `--ip <address[/prefix]>` | Configure a static Wi-Fi address; a bare address defaults to `/24` |
-| `--dry-run`               | Print intended actions without changing the Pi                     |
-| `-h`, `--help`            | Show the built-in usage text                                       |
+### 6.2 Options
 
-The script may instead read `SAHURHUB_WIFI_SSID`, `SAHURHUB_WIFI_PASS`, and `SAHURHUB_STATIC_IP` from `.env.local`. It is designed to be idempotent: existing packages, Bun, mkcert, the service template, kiosk autostart, Wi-Fi profile, hostname, and matching certificate are detected or updated safely on rerun.
+| Flag                    | Purpose                                                |
+| ----------------------- | ------------------------------------------------------ |
+| `--ssid NAME`           | Hotspot SSID                                           |
+| `--pass SECRET`         | Hotspot password                                       |
+| `--ip ADDRESS[/PREFIX]` | Static Wi-Fi address; a bare address defaults to `/24` |
+| `--dry-run`             | Print every action without changing the device         |
+| `-h`, `--help`          | Built-in usage text                                    |
 
-It installs or configures:
+Credentials can also come from `.env.local` instead of flags, via `SAHURHUB_WIFI_SSID`, `SAHURHUB_WIFI_PASS`, and `SAHURHUB_STATIC_IP`.
 
-- Debian packages: Avahi, CA certificates, curl, NSS trust support, and Chromium when an apt package is available.
-- Bun for the invoking non-root user and a static mkcert binary for the machine architecture.
-- The local mkcert trust root; an HTTPS certificate covering localhost, the detected/static LAN IP, and `sahurhub.local` when an IP is available.
-- An optional NetworkManager phone-hotspot profile, hostname `sahurhub`, and Avahi mDNS.
-- `bun install`, the remote-app production build, and `sahurhub.service` so the server starts on boot.
-- A Raspberry Pi OS Bookworm labwc autostart entry that opens Chromium kiosk mode at `http://localhost:8080`.
+**Unsure what it will do?** Run `sudo ./scripts/setup-pi.sh --dry-run` first. It prints the full plan and touches nothing.
 
-### SPI Panel Overlay
+### 6.3 What It Actually Does
 
-Never run `goodtft/LCD-show` on a Pi 5; the task-list hardware guidance marks it broken.
+| Stage           | Actions                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Packages**    | Installs `avahi-daemon`, `ca-certificates`, `curl`, `libnss3-tools`, and Chromium (`chromium` or `chromium-browser`)                |
+| **Toolchain**   | Installs Bun for your user and symlinks `bun`/`bunx` into `/usr/local/bin`; installs a static `mkcert` binary for your architecture |
+| **Trust**       | Runs `mkcert -install` to add the local CA to the Pi's trust store                                                                  |
+| **Network**     | Creates a NetworkManager profile named **`SahurHub Phone AP`** with WPA-PSK and autoconnect; applies a static IP if you passed one  |
+| **Identity**    | Sets the hostname to `sahurhub` and enables Avahi so `sahurhub.local` resolves                                                      |
+| **Certificate** | Mints `cert/cert.pem` + `cert/key.pem` covering `localhost`, `127.0.0.1`, `::1`, the detected LAN IP, and `sahurhub.local`          |
+| **Build**       | Runs `bun install`, `bun run build:remote`, and `bun run build:kiosk`                                                               |
+| **Service**     | Writes and enables `/etc/systemd/system/sahurhub.service` so the server starts on boot and restarts on failure                      |
+| **Kiosk**       | Appends a Chromium `--kiosk` line to `~/.config/labwc/autostart`                                                                    |
+| **Panel**       | Appends the SPI display overlay to `/boot/firmware/config.txt`                                                                      |
 
-Stock Bookworm does not contain `dtoverlay=waveshare35a,drm`; firmware silently skips it. Do not install `goodtft/LCD-show` to obtain an overlay.
+Re-running detects each of these and skips or updates it rather than duplicating work.
 
-The confirmed overlay for the Waveshare 3.5-inch RPi LCD (A) Rev4.0 on Pi 5 Bookworm is:
+### 6.4 About The Panel Overlay
+
+The script appends exactly this to `/boot/firmware/config.txt`:
 
 ```ini
 dtoverlay=piscreen,drm,speed=18000000,rotate=90
 ```
 
-`piscreen.dtbo` drives the panel's ILI9486 display controller and XPT2046 touch controller. The ILI9486 DRM driver appears as `card-SPI-1`; `ads7846` touch also binds. `rotate=90` is the confirmed upright portrait orientation for the vertically standing case. `rotate=0` renders sideways.
+Two hard-won facts behind that one line, both confirmed on real hardware:
 
-Use only this panel overlay. Reboot, then confirm the panel is a DRM display under labwc/Wayland before launching Chromium.
+- **`waveshare35a,drm` does not exist in stock Bookworm.** Despite the panel being a genuine Waveshare 3.5" Rev4.0, the working overlay is `piscreen,drm`. Earlier project notes referencing `waveshare35a` are superseded.
+- **Do not use `goodtft` / `LCD-show`.** Those vendor installer scripts are broken on Pi 5 + Bookworm and will leave you with a non-booting or blank system.
 
-If the SPI display fails to appear as a DRM display, use an HDMI screen for the demo. Record the fallback; do not block bring-up on a dead panel.
+`rotate=90` gives the confirmed **upright portrait** orientation. The kiosk page is resolution-agnostic, so it fills whatever the panel reports.
 
-## API Key And Environment
+**This overlay requires a reboot to take effect** (§8).
 
-On the Pi, create or edit `SahurHub/.env.local` and set the key received through a private channel:
+---
 
-```ini
-DASHSCOPE_API_KEY=<private-key>
+## 7. Adding Your Qwen Key
+
+The provisioner does **not** create `.env.local`. Create it yourself:
+
+```bash
+cp .env.example .env.local
+nano .env.local
 ```
 
-Never commit, paste into chat, screenshot, or otherwise share `.env.local`. Without `DASHSCOPE_API_KEY`, SahurHub still runs with the mock brain, which is suitable for panel, renderer, and FPS checks but does not exercise the live Qwen chain.
+| Variable            | Set It To                                                                  |
+| ------------------- | -------------------------------------------------------------------------- |
+| `DASHSCOPE_API_KEY` | Your Alibaba Cloud Model Studio key. **Leave blank to run the mock brain** |
+| `QWEN_CHAT_MODEL`   | `qwen3.6-flash` — reply and tag generation                                 |
+| `QWEN_ASR_MODEL`    | `qwen3-asr-flash` — speech to text                                         |
+| `QWEN_TTS_MODEL`    | `qwen3-tts-flash` — text to speech                                         |
+| `QWEN_VISION_MODEL` | Model for the image-upload lane                                            |
 
-`.env.example` also defines these optional or pinned values:
+Get a key from **Alibaba Cloud Model Studio** (the International/Singapore region was used for this project).
 
-| Variable                                              | Purpose                                                                                         |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `QWEN_CHAT_MODEL`, `QWEN_ASR_MODEL`, `QWEN_TTS_MODEL` | Chained model IDs, pinned to the production path                                                |
-| `QWEN_REALTIME_MODEL`, `QWEN_OMNI_HTTP_MODEL`         | Experimental model settings; neither is the operating fallback path                             |
-| `QWEN_BASE_URL`, `QWEN_WS_HOST`                       | Optional dedicated/personal gateway overrides; leave blank for the documented default endpoints |
-| `SAHURHUB_WIFI_SSID`, `SAHURHUB_WIFI_PASS`            | Optional hotspot values read by the Pi provisioner                                              |
-| `SAHURHUB_STATIC_IP`                                  | Optional static Wi-Fi address with prefix; omit for DHCP                                        |
+> [!NOTE]
+> `.env.local` is read by systemd as an `EnvironmentFile`, so it must be plain `KEY=value` lines. No shell expansion, no inline comments after a value, no surrounding quotes unless they are part of the value. A malformed line here is the usual cause of an unexpectedly silent mock brain.
 
-`./scripts/setup.sh` copies `.env.example` only when `.env.local` is absent, so it does not overwrite an existing secret file.
+Restart to pick up the key:
 
-## First Boot Verification
+```bash
+sudo systemctl restart sahurhub.service
+```
 
-After provisioning and a reboot, pass all four checks:
+**Cost:** roughly **$0.002** per spoken reply once the free TTS quota is used up.
 
-1. Sahur renders on the SPI panel with no keyboard or mouse attached.
-2. On a phone connected to the same network, open `https://sahurhub.local:8443/phone` or `https://<pi-ip>:8443/phone` and accept the local certificate warning once.
-3. Send a text message from the remote app and confirm Sahur reacts on the panel.
-4. Record the subjective FPS feel and any errors in `docs/task-list.md`.
+---
 
-For the panel check, also confirm Chromium launched unattended and Three.js rendered Sahur. WebGL failure shows `RENDERER ERROR`; there is no alternate renderer.
+## 8. Reboot And Verify
 
-## Interacting With SahurHub
+```bash
+sudo reboot
+```
 
-### Kiosk
+The reboot applies the SPI overlay and proves that unattended startup works — which is the thing you actually care about.
 
-The panel shows Sahur, a connection state, and a phone URL while idle. It reflects conversation state with expressions: neutral when idle, smug while thinking, and shocked while listening. Audio amplitude drives mouth movement; reply effects and knock actions wait for the audio playback boundary so they land with the words.
+After it comes back, walk the checklist:
 
-Normal reminders and escalations map to Sahur's knock action, with escalation levels from 0 through 2. Three.js is the sole kiosk renderer. A missing or unusable WebGL context shows `RENDERER ERROR`; fix the browser or GPU environment rather than switching renderers.
+| #   | Check                     | Command Or Action                      | Expected                                             |
+| --- | ------------------------- | -------------------------------------- | ---------------------------------------------------- |
+| 1   | Service is up             | `systemctl status sahurhub.service`    | `active (running)`                                   |
+| 2   | Panel shows the character | Look at the device                     | The character, an `ONLINE` badge, and a `PHONE:` URL |
+| 3   | Logs are clean            | `journalctl -u sahurhub.service -n 50` | No repeating errors                                  |
+| 4   | Server answers            | `curl -s http://localhost:8080/info`   | JSON with the phone URL and HTTPS port               |
+| 5   | Phone can connect         | Open the URL shown on the panel        | The remote loads (after the cert warning — §9.2)     |
 
-The optional device-input affordance is hidden by default and can be exposed with `?deviceInput=1`; the MVP interaction path remains the phone remote. `?audioSink=kiosk` forces kiosk playback for local diagnosis.
+If the panel is blank but the service is running, the overlay is the suspect — see §13.
 
-### Remote Webapp
+---
 
-Open the HTTPS URL shown on the kiosk, or scan a QR code when using the HTTPS-mic spike's printed or `/qr` QR route. The current kiosk implementation renders a URL widget rather than a QR image, so typing the displayed URL is the normal product path.
+## 9. Using The Device
 
-On a new phone or hotspot session, the browser will warn about the locally issued certificate. This is expected because the Pi's mkcert root is not automatically trusted by the phone:
+### 9.1 Joining From Your Phone
 
-- Chrome on Android: **Advanced** → **Proceed** to the site.
-- Safari on iOS: **Show Details** → **visit this website** → confirm.
-- Then grant microphone access; HTTPS is required for browser microphone capture.
+The panel displays the phone URL along the bottom. You have two ways in:
 
-The remote supports:
+- **Scan the QR.** Tap the `PHONE:` badge — or anywhere along the bottom strip — and the kiosk shows a scannable QR of the remote URL. Tap outside the card to dismiss it.
+- **Type the URL.** `https://<pi-ip>:8443/phone`, or `https://sahurhub.local:8443/phone`.
 
-- Chat text and hold-to-talk push-to-talk audio. Releasing the control ends the audio turn; interrupt stops an in-flight turn.
-- Automatic task capture from ordinary conversational context. Do not issue a special add-task command: detected tasks appear with their duration, and the scheduler uses that duration for reminders and escalation. Tell Sahur a task is complete to mark it done automatically.
-- A Tasks drawer with live countdowns, status and escalation level, plus manual Done and Discard actions.
-- A conversation sidebar to create, switch, and delete conversations. Conversation titles are generated asynchronously after the first exchange and may be edited from the top bar.
-- Text or image uploads up to 5 MB. Text enters conversation context; images use the vision lane. Both are recorded in conversation history.
-- Light and dark themes, plus Settings for phone versus device audio output, character selection, server address, and resetting the active conversation history. Sahur is the only currently built character, although the picker follows the character registry.
+> The `/phone` path is required. Plain `/` serves the **kiosk** on both HTTP and HTTPS.
 
-On empty conversation history, Sahur opens by gauging the user's TODO intent rather than waiting silently.
+### 9.2 The Certificate Warning Is Expected
 
-## Local Development
+The Pi's mkcert root is not trusted by your phone, so the browser will warn on first visit. This is normal for a local device.
 
-### One-Time Bootstrap
+| Browser              | Steps                                               |
+| -------------------- | --------------------------------------------------- |
+| **Chrome (Android)** | **Advanced** → **Proceed to the site**              |
+| **Safari (iOS)**     | **Show Details** → **visit this website** → confirm |
 
-Install mkcert first. These are the Debian/Ubuntu commands printed by `./scripts/setup.sh`; they also apply inside WSL2:
+Then **grant microphone access** — HTTPS plus permission is what makes push-to-talk work.
+
+### 9.3 What The Remote Can Do
+
+| Capability          | Detail                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Chat and talk**   | Type, or hold-to-talk. Releasing ends the audio turn; interrupt stops an in-flight reply                                         |
+| **Automatic tasks** | Tasks are captured from ordinary conversation — there is **no add-task command**. Say a task is done and it closes automatically |
+| **Tasks drawer**    | Live countdowns, status, escalation level, plus manual **Done** and **Discard**                                                  |
+| **Conversations**   | Create, switch, delete. Titles generate asynchronously after the first exchange and are editable                                 |
+| **Uploads**         | Text or images up to **5 MB**. Text enters context; images go through the vision lane                                            |
+| **Settings**        | Light/dark theme, phone-vs-device audio output, character selection, server address, history reset                               |
+
+On an empty conversation, the character opens by gauging your TODO intent rather than waiting silently.
+
+### 9.4 The Panel Itself
+
+- Reminders and escalations play the character's action animation, with escalation levels 0 through 2.
+- Tapping the character pokes it, and it retaliates.
+- Three.js is the **only** renderer. A missing or unusable WebGL context shows `RENDERER ERROR` — fix the browser or GPU environment rather than looking for a fallback renderer.
+- `?deviceInput=1` exposes an optional device-input affordance, hidden by default. `?audioSink=kiosk` forces kiosk playback for local diagnosis.
+
+---
+
+## 10. Operating The Service
+
+### 10.1 Everyday Commands
+
+```bash
+systemctl status sahurhub.service         # is it running?
+sudo systemctl restart sahurhub.service   # after editing .env.local
+sudo systemctl stop sahurhub.service      # free the ports for a manual run
+journalctl -u sahurhub.service -f         # follow the logs
+```
+
+### 10.2 Service Definition
+
+The generated unit at `/etc/systemd/system/sahurhub.service`:
+
+| Property             | Value                                                               |
+| -------------------- | ------------------------------------------------------------------- |
+| **User**             | The user who ran `sudo ./scripts/setup-pi.sh`                       |
+| **WorkingDirectory** | Your clone of the repository                                        |
+| **ExecStart**        | `bun run src/server/index.ts`                                       |
+| **EnvironmentFile**  | `.env.local` — **optional**, so the service still starts without it |
+| **Restart**          | `always`, after 3 seconds                                           |
+
+### 10.3 Updating
+
+```bash
+cd ~/SahurHub
+git pull
+sudo ./scripts/setup-pi.sh
+```
+
+Re-running the provisioner rebuilds both browser apps and refreshes the service definition. For a code-only change you can skip the full script:
+
+```bash
+bun install && bun run build:remote && bun run build:kiosk
+sudo systemctl restart sahurhub.service
+```
+
+The server reads `apps/remote/dist` and `src/kiosk/dist` from disk per request, so a rebuild plus a browser refresh is usually enough — no restart needed for asset-only changes.
+
+### 10.4 Ports
+
+| Port   | Protocol | Serves                               |
+| ------ | -------- | ------------------------------------ |
+| `8080` | HTTP     | Kiosk at `/`, `/ws`, `/info`         |
+| `8443` | HTTPS    | Remote at `/phone`, `/ws`, `/upload` |
+
+Override with `PORT` and `HTTPS_PORT` to run parallel instances.
+
+---
+
+## 11. Networking
+
+### 11.1 The Certificate Is Pinned To An IP
+
+This is the most common post-setup surprise.
+
+The certificate covers whatever IP the Pi had **when it was minted**. After joining a different network, the IP changes and the old certificate no longer matches:
+
+```bash
+sudo ./scripts/setup-pi.sh   # re-mints the cert for the current IP
+sudo reboot
+```
+
+The reboot also refreshes the `PHONE:` badge on the panel — currently required, because the kiosk reads discovery data at startup.
+
+### 11.2 Roaming Between Networks
+
+Pre-provision a second network so the Pi connects automatically:
+
+```bash
+sudo nmcli connection add type wifi ifname '*' con-name 'Venue Wi-Fi' ssid 'Venue SSID'
+sudo nmcli connection modify 'Venue Wi-Fi' wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'venue-password' connection.autoconnect yes
+```
+
+Then re-run the provisioner and reboot, per §11.1.
+
+### 11.3 mDNS
+
+Avahi publishes the Pi as `sahurhub.local`, which is normally the friendliest way to reach it. Two caveats:
+
+- **WSL does not resolve mDNS.** `ssh <user>@sahurhub.local` fails there. Resolve the IP from Windows instead, or pin it in `/etc/hosts`:
+  ```bash
+  powershell.exe -Command "ping -4 -n 1 sahurhub.local"
+  ```
+- **Always confirm the URL from a second device** on the same network, not only from the Pi itself. Same-network reachability is what remote control and browser microphone access actually require.
+
+### 11.4 Demo Checklist
+
+For anything with an audience, in order:
+
+1. Join the venue hotspot **first**, then boot the Pi.
+2. Re-run `sudo ./scripts/setup-pi.sh` once on that network, then reboot.
+3. Use **wall power** only.
+4. Keep an SSH session tailing `journalctl -u sahurhub.service -f`.
+5. Confirm the phone URL from the phone, not from the Pi.
+6. If every reply is an identical canned line, the mock brain is active — check `DASHSCOPE_API_KEY`.
+
+---
+
+## 12. Local Development Without A Pi
+
+The whole product runs on a laptop. You lose only the panel and device audio.
+
+### 12.1 Install mkcert
+
+Debian/Ubuntu/WSL2:
 
 ```bash
 sudo apt update && sudo apt install -y libnss3-tools
@@ -154,109 +429,114 @@ curl -JLO https://dl.filippo.io/mkcert/latest?for=linux/amd64
 chmod +x mkcert-v*-linux-amd64 && sudo mv mkcert-v*-linux-amd64 /usr/local/bin/mkcert
 ```
 
-Then bootstrap the repository:
+### 12.2 Bootstrap
 
 ```bash
+git clone https://github.com/TolongLabs/SahurHub
+cd SahurHub
 ./scripts/setup.sh
 ```
 
-The script runs `bun install`, `bun run build:remote`, and `bun run build:kiosk`; installs the mkcert CA; when it detects a LAN IP, creates `cert/` with SANs for `localhost`, loopback addresses, that IP, and `sahurhub.local`; and scaffolds `.env.local` from `.env.example` without replacing an existing file.
+Unlike `setup-pi.sh`, this one **does** scaffold `.env.local` from `.env.example` (without overwriting an existing file). It also runs `bun install`, builds both browser apps, installs the mkcert CA, and — when it detects a LAN IP — mints `cert/` with SANs for `localhost`, loopback, that IP, and `sahurhub.local`.
 
-### Daily Loop
-
-Start the server:
+### 12.3 Run
 
 ```bash
 bun run dev
 ```
 
-- Open the kiosk at `http://localhost:8080/`. It is the Three.js Sahur display; use Chrome device toolbar at **480×320** to preview panel framing.
-- Open the remote webapp at `https://localhost:8443/phone`. The `/phone` path is required: `/` serves the kiosk on both HTTP and HTTPS.
-- If `DASHSCOPE_API_KEY` is absent from `.env.local`, the mock brain is active, which is fine for UI and kiosk work. With the key present, the live chained backend runs; each spoken reply costs about **$0.002** after the free TTS quota.
+| Surface    | URL                            | Notes                                                  |
+| ---------- | ------------------------------ | ------------------------------------------------------ |
+| **Kiosk**  | `http://localhost:8080/`       | Preview at **480×320** in the browser's device toolbar |
+| **Remote** | `https://localhost:8443/phone` | The `/phone` path is required                          |
 
-### WSL2 Browser And Certificate Notes
+| Command                | Purpose                                        |
+| ---------------------- | ---------------------------------------------- |
+| `bun run dev`          | Run the server                                 |
+| `bun run dev:kiosk`    | Open a local Chromium kiosk preview at 480×320 |
+| `bun run dev:remote`   | Vite dev server for the remote app, with HMR   |
+| `bun run build:remote` | Build the app served at `/phone`               |
+| `bun run build:kiosk`  | Build the kiosk bundle                         |
+| `bun test`             | Run tests                                      |
+| `bun run typecheck`    | Type-check without emitting                    |
+| `bun run lint`         | Biome checks                                   |
 
-Windows browsers reach the WSL server through `localhost` forwarding. The WSL mkcert CA is not trusted by Windows, so either accept the warning once or import the CA for clean microphone/getUserMedia push-to-talk. In an elevated Windows PowerShell:
-
-```powershell
-$caRoot = wsl mkcert -CAROOT
-$caPath = wsl wslpath -w "$caRoot/rootCA.pem"
-certutil -addstore -f ROOT $caPath
-```
-
-`bun run dev:kiosk` starts local Chromium. Under WSLg, WebGL is commonly blocklisted and Sahur shows `RENDERER ERROR`; use the Windows browser for the kiosk instead. The desktop preview checks correctness only, never FPS, SPI refresh, or Pi GPU behavior.
-
-WSL does not resolve mDNS, so `ssh t010ng@sahurhub.local` fails there. Resolve the Pi IP from Windows instead, or pin it in `/etc/hosts`:
-
-```bash
-powershell.exe -Command "ping -4 -n 1 sahurhub.local"
-```
-
-### Rebuild And Test Commands
-
-The server reads `apps/remote/dist` and `src/kiosk/dist` from disk for each request. After remote changes, run `bun run build:remote` and refresh the `/phone` tab, or use `bun run dev:remote` for Vite HMR. After kiosk or model changes, run `bun run build:kiosk` and refresh the kiosk tab. Neither path needs a server restart — with one caveat: if the server was started before `apps/remote/dist` ever existed, it serves the placeholder page until restarted (the documented setup order avoids this).
-
-Use `PORT` and `HTTPS_PORT` to run parallel instances or tests, for example:
+Run parallel instances by overriding the ports:
 
 ```bash
 PORT=8081 HTTPS_PORT=8444 bun run dev
 ```
 
-| Command                | Purpose                                             |
-| ---------------------- | --------------------------------------------------- |
-| `bun run dev`          | Run the Bun server                                  |
-| `bun run dev:kiosk`    | Open the 480×320 local Chromium kiosk preview       |
-| `bun run dev:remote`   | Run the Vite remote-app development server with HMR |
-| `bun run build:remote` | Build the remote app served at `/phone`             |
-| `bun run build:kiosk`  | Build the kiosk browser bundle                      |
-| `bun test`             | Run tests                                           |
-| `bun run typecheck`    | Type-check without emitting files                   |
-| `bun run lint`         | Run Biome checks                                    |
-| `bun run format`       | Apply Biome and Prettier formatting                 |
+> The desktop preview checks **layout and animation correctness only**. It says nothing about on-panel FPS, SPI refresh, colour, or Pi GPU behaviour.
 
-## Networking And Demo Plan
+### 12.4 WSL2 Notes
 
-- Use Adam's phone hotspot for demos rather than venue Wi-Fi, and rehearse the complete path at least once before finals.
-- Join the Pi during provisioning with `--ssid` and `--pass`, or keep hotspot values only in `.env.local`.
-- Use `--ip <address[/prefix]>` or `SAHURHUB_STATIC_IP` when a stable demo address is needed. Otherwise the profile uses DHCP.
-- Avahi exposes the hostname as `sahurhub.local`; the phone remote is normally `https://sahurhub.local:8443/phone`.
-- The certificate covers the IP present when it was minted. After joining a new network, rerun `sudo ./scripts/setup-pi.sh` so its current IP is included before relying on the IP URL.
-- Confirm the URL from another device on the hotspot, not only from the Pi. The same-network requirement applies to remote control and browser microphone use.
+- **WebGL is commonly blocklisted under WSLg**, so `bun run dev:kiosk` shows `RENDERER ERROR`. Use a Windows browser against the forwarded `localhost` instead.
+- The WSL mkcert CA is not trusted by Windows. Accept the warning once, or import the CA for clean push-to-talk. In an elevated PowerShell:
+  ```powershell
+  $caRoot = wsl mkcert -CAROOT
+  $caPath = wsl wslpath -w "$caRoot/rootCA.pem"
+  certutil -addstore -f ROOT $caPath
+  ```
 
-### Network Roaming
+### 12.5 Rebuild Loop
 
-Pre-provision a second Wi-Fi connection for automatic roaming:
+The server reads both `dist` directories from disk per request, so neither rebuild needs a restart:
 
-```bash
-sudo nmcli connection add type wifi ifname '*' con-name 'Venue Wi-Fi' ssid 'Venue SSID'
-sudo nmcli connection modify 'Venue Wi-Fi' wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'venue-password' connection.autoconnect yes
-```
+| Changed        | Do This                                                                                |
+| -------------- | -------------------------------------------------------------------------------------- |
+| Remote app     | `bun run build:remote`, refresh the `/phone` tab — or use `bun run dev:remote` for HMR |
+| Kiosk or model | `bun run build:kiosk`, refresh the kiosk tab                                           |
 
-After switching networks, rerun `sudo ./scripts/setup-pi.sh`, then reboot so the kiosk PHONE badge refreshes. The reboot remains necessary until the `/info` refresh fix ships.
+**One caveat:** if the server started before `apps/remote/dist` ever existed, it serves a placeholder page until restarted. Following the setup order above avoids this.
 
-### Demo-Day Checklist
+---
 
-1. Join the venue hotspot first, then boot the Pi.
-2. Rerun `sudo ./scripts/setup-pi.sh` once on the venue network.
-3. Use wall power only.
-4. Keep one SSH session tailing `journalctl -u sahurhub.service -f`.
-5. If every reply is the identical canned `Heard you loud and clear...`, the mock brain is active: confirm `DASHSCOPE_API_KEY` loaded from `.env.local`.
+## 13. Troubleshooting
 
-## Troubleshooting
+### Hardware And Boot
 
-| Symptom                                            | Action                                                                                                                                                                                      |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SPI panel is blank or not a DRM display            | Check the single correct overlay, reboot, and use HDMI as the demo fallback. Do not use LCD-show on Pi 5.                                                                                   |
-| Red LED but Pi does not boot with the LCD attached | Use the wall PSU; a 45W power bank without 5V/5A cannot boot this load. Check `vcgencmd get_throttled` after boot (`0x0` is clean).                                                         |
-| Red LED with no green activity                     | Reseat the LCD HAT socket over pins 1–26 at the 3.3V/5V end; ensure both pin rows engage.                                                                                                   |
-| Phone shows a certificate warning                  | Accept the expected local-cert warning using the platform steps above, then grant microphone permission.                                                                                    |
-| Phone page has no microphone prompt                | Use the HTTPS remote URL on the same hotspot; `getUserMedia` requires the secure context.                                                                                                   |
-| Identical `Heard you loud and clear...` replies    | The mock brain is active. Confirm `DASHSCOPE_API_KEY` loaded from `.env.local`, then restart the service.                                                                                   |
-| `RENDERER ERROR` or Three.js is slow               | Confirm browser WebGL and GPU support, then measure and record the on-panel result. There is no alternate renderer; visible low FPS is an accepted hardware risk **(confirm on hardware)**. |
-| `sahurhub.local` or IP URL does not open           | Confirm the Pi joined the hotspot, Avahi is running, the phone is on the same network, and the certificate SAN covers the URL being used.                                                   |
-| `ssh t010ng@sahurhub.local` fails in WSL           | WSL has no mDNS. Resolve it with `powershell.exe -Command "ping -4 -n 1 sahurhub.local"` or pin the IP in `/etc/hosts`.                                                                     |
+| Symptom                                       | Fix                                                                                                                                |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Red LED, no green activity, no boot           | Reseat the LCD HAT over pins 1–26 at the 3.3V/5V end; make sure **both** rows engage (§3.1)                                        |
+| Red LED, will not boot with the LCD attached  | Use the official wall PSU. A 45W bank without a 5V/5A profile cannot carry this load                                               |
+| Boots, but behaves erratically                | `vcgencmd get_throttled` — anything other than `0x0` means power                                                                   |
+| Panel blank, or not detected as a DRM display | Confirm the overlay line in `/boot/firmware/config.txt`, reboot, and fall back to HDMI if needed. **Never** use `LCD-show` on Pi 5 |
 
-## Remaining Hardware Confirmation Gaps
+### Service And Model
 
-- No on-panel FPS measurement or end-to-end phone-on-hotspot timing is recorded yet; capture both during T13/Spike B.
-- The kiosk source currently displays the phone URL but not a QR image. The separate HTTPS-mic spike supplies a QR route for its own test flow.
+| Symptom                                       | Fix                                                                                                                           |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Service will not start                        | `journalctl -u sahurhub.service -n 100`. Check that the build succeeded and the working directory is right                    |
+| Every reply is the same canned line           | The mock brain is active. Check `DASHSCOPE_API_KEY` in `.env.local`, confirm no malformed lines (§7), then restart            |
+| `RENDERER ERROR`, or Three.js is visibly slow | Confirm WebGL and GPU support in the browser. There is no alternate renderer — low FPS on this panel is an accepted trade-off |
+
+### Network And Phone
+
+| Symptom                                      | Fix                                                                                                                                             |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Certificate warning on the phone             | Expected. Accept it via the §9.2 steps, then grant microphone permission                                                                        |
+| No microphone prompt appears                 | You must be on the **HTTPS** URL. `getUserMedia` requires a secure context                                                                      |
+| `sahurhub.local` or the IP URL will not open | Confirm the Pi joined the network, Avahi is running, the phone is on the same network, and the certificate covers the URL you are using (§11.1) |
+| The panel shows a stale phone URL            | Re-run the provisioner and reboot (§11.1)                                                                                                       |
+| `ssh <user>@sahurhub.local` fails in WSL     | WSL has no mDNS — resolve the IP from Windows or pin it in `/etc/hosts` (§11.3)                                                                 |
+
+---
+
+## 14. What Is Confirmed, And What Is Not
+
+Being explicit about this, since a runbook that overstates its own certainty is worse than no runbook.
+
+### Confirmed On Real Hardware
+
+- End-to-end provisioning on a Raspberry Pi 5 with Raspberry Pi OS Bookworm 64-bit and a Waveshare 3.5" Rev4.0 panel.
+- The overlay `dtoverlay=piscreen,drm,speed=18000000,rotate=90`, including that `waveshare35a,drm` is **absent** from stock Bookworm.
+- Upright portrait orientation.
+- The live Qwen chained path (ASR → chat → TTS) running on-device.
+- Both power failure modes and the HAT-seating boot failure described in §13.
+
+### Not Independently Verified
+
+- **Sustained on-panel FPS.** Three.js is the sole renderer and visible jank on this panel is an accepted trade-off, but no measured figure is recorded.
+- **Distributions other than Raspberry Pi OS Bookworm.** The server half of the provisioner is written to be Debian-family portable, but only Bookworm has been exercised. The panel and kiosk steps are Bookworm-specific by design, and the script warns rather than guesses when it cannot detect `labwc` or an apt Chromium package.
+- **The enclosure**, which has no reference design here (§2).
