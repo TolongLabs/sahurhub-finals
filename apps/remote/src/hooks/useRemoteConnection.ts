@@ -4,6 +4,7 @@
 import type { DisplayRotation } from '@shared/protocol.ts'
 import { SahurSocket } from '@shared/ws-client.ts'
 import { useEffect, useRef, useState } from 'react'
+import { StingPlayer, stingForAgentEvent } from '../audio/stings.ts'
 import { chatActions } from '../store/chatStore.ts'
 import type { ChatMessage } from '../types.ts'
 
@@ -30,6 +31,9 @@ export function useRemoteConnection(): RemoteConnection {
   const [socket] = useState(() => new SahurSocket())
   const activeAssistantId = useRef<string | null>(null)
   const activeVoiceId = useRef<string | null>(null)
+  const stings = useRef(new StingPlayer())
+  const stingCharacterId = useRef('sahur')
+  const stingOnPhone = useRef(false)
 
   useEffect(() => {
     socket.onConn = (up) => {
@@ -79,9 +83,20 @@ export function useRemoteConnection(): RemoteConnection {
         if (!chatActions.isActiveConversation(event.conversationId)) return
         chatActions.setTasks(event.tasks)
       }),
-      socket.on('character_active', (event) => chatActions.setActiveCharacter(event.characterId)),
+      socket.on('character_active', (event) => {
+        stingCharacterId.current = event.characterId
+        chatActions.setActiveCharacter(event.characterId)
+      }),
       socket.on('character_list', (event) => chatActions.setCharacters(event.characters)),
-      socket.on('audio_sink', (event) => chatActions.setAudioSink(event.sink, event.active)),
+      socket.on('audio_sink', (event) => {
+        stingOnPhone.current = event.sink === 'phone'
+        chatActions.setAudioSink(event.sink, event.active)
+      }),
+      socket.on('agent_event', (event) => {
+        if (!stingOnPhone.current) return
+        const sting = stingForAgentEvent(event.event.kind)
+        if (sting) stings.current.play(stingCharacterId.current, sting)
+      }),
       socket.on('display_rotation', (event) => chatActions.setDisplayRotation(event.degrees)),
       socket.on('notice', (event) => {
         if (!chatActions.isActiveConversation(event.conversationId) || event.message !== 'asr_failed') return
@@ -95,6 +110,7 @@ export function useRemoteConnection(): RemoteConnection {
 
     return () => {
       for (const off of unsubscribers) off()
+      stings.current.stop()
       socket.close()
     }
   }, [socket])
