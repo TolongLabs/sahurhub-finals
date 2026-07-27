@@ -454,20 +454,26 @@ Built by **TolongLabs** for the Qwen Brainrot Hackathon 2026.
 <div align="center">
 <table>
   <tr>
-    <td align="center" width="50%">
+    <td align="center" width="33%">
       <a href="https://github.com/AlaskanTuna"><img src="https://github.com/AlaskanTuna.png" width="96" alt="Tuna" /></a><br />
       <b>Tuna</b><br />
       <a href="https://github.com/AlaskanTuna">@AlaskanTuna</a>
     </td>
-    <td align="center" width="50%">
+    <td align="center" width="33%">
       <a href="https://github.com/chaosiris"><img src="https://github.com/chaosiris.png" width="96" alt="Chaos" /></a><br />
       <b>Chaos</b><br />
       <a href="https://github.com/chaosiris">@chaosiris</a>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://github.com/Doraemon-00"><img src="https://github.com/Doraemon-00.png" width="96" alt="Doraemon" /></a><br />
+      <b>Doraemon</b><br />
+      <a href="https://github.com/Doraemon-00">@Doraemon-00</a>
     </td>
   </tr>
   <tr>
     <td align="center"><sub>Software &amp; integration — server, kernel, persona, kiosk, remote.</sub></td>
     <td align="center"><sub>Hardware &amp; assembly — Pi build, panel, enclosure, demo rig.</sub></td>
+    <td align="center"><sub>Documentation &amp; testing.</sub></td>
   </tr>
 </table>
 </div>
